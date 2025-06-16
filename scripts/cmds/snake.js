@@ -15,20 +15,27 @@ if (fs.existsSync(winsFile)) {
 const COLORS = {
     "🟢🟩": { head: "🟢", body: "🟩" },
     "🔵🟦": { head: "🔵", body: "🟦" },
-    "🔵🟦": { head: "🔵", body: "🟦" }, // IA (bleu au lieu de blanc)
     "🔴🟥": { head: "🔴", body: "🟥" },
     "🟠🟧": { head: "🟠", body: "🟧" },
     "🟡🟨": { head: "🟡", body: "🟨" },
     "🟣🟪": { head: "🟣", body: "🟪" },
-    "🟤🟫": { head: "🟤", body: "🟫" }
+    "🟤🟫": { head: "🟤", body: "🟫" },
+    "🌈": { head: "🌈", body: "✨" } // Nouvelle couleur spéciale
+};
+
+const SPECIAL_ITEMS = {
+    "🍎": { type: "normal", points: 1 },
+    "🥇": { type: "gold", points: 2, lifetime: 5 },
+    "💣": { type: "bomb", effect: "shrink" },
+    "⚡": { type: "speed", effect: "double_move", duration: 3 }
 };
 
 module.exports = {
     config: {
         name: "snake",
-        version: "1.5",
+        version: "2.0",
         author: "Blẳȼk",
-        description: "Jeu Snake multijoueur avec IA, choix de couleur et classement",
+        description: "Jeu Snake multijoueur avec effets spéciaux et commandes améliorées",
         category: "game",
         usage: "<@joueur2 | ID | IA>",
         cooldown: 5
@@ -49,7 +56,7 @@ module.exports = {
         if (player1 === player2) return message.reply("❌ Vous ne pouvez pas jouer contre vous-même.");
 
         const id = `${player1}_${player2}`;
-        if (snakeGames[id]) return message.reply("⚠️ Une partie est déjà en cours entre vous deux.");
+        if (snakeGames[id]) return message.reply("⚠ Une partie est déjà en cours entre vous deux.");
 
         // Démarre la sélection des couleurs
         snakeGames[id] = {
@@ -60,8 +67,9 @@ module.exports = {
         };
 
         let prompt = "🎨 Choisissez chacun une couleur parmi celles-ci :\n\n";
-        prompt += Object.keys(COLORS).filter(c => c !== "🔵🟦").join("  ") + "\n\n";
+        prompt += Object.keys(COLORS).join("  ") + "\n\n";
         prompt += "Répondez simplement par la couleur (ex: 🟢🟩) pour choisir votre serpent.\n";
+        prompt += "Vous pouvez aussi taper 'stop' à tout moment pour quitter la partie.\n";
         prompt += `${player2 === "IA" ? "Toi" : "Les deux joueurs"}, choisis(sez) votre couleur.`;
 
         message.reply(prompt);
@@ -74,6 +82,30 @@ module.exports = {
         if (!id) return;
 
         const game = snakeGames[id];
+
+        // Gestion de la commande stop
+        if (input.toLowerCase() === "stop") {
+            if (game.state === "choosingColors") {
+                message.reply("🚫 Partie annulée.");
+                delete snakeGames[id];
+                return;
+            }
+
+            const quitter = userId;
+            const gagnant = game.players.find(p => p !== quitter) || game.players[0];
+            
+            winData[gagnant] = (winData[gagnant] || 0) + 1;
+            fs.writeFileSync(winsFile, JSON.stringify(winData, null, 2));
+
+            Promise.all([
+                usersData.getName(quitter),
+                gagnant === "IA" ? "IA" : usersData.getName(gagnant)
+            ]).then(([quitterName, gagnantName]) => {
+                message.reply(`🚫 ${quitterName} a quitté la partie ! ${gagnantName} gagne par forfait !`);
+                delete snakeGames[id];
+            });
+            return;
+        }
 
         if (game.state === "choosingColors") {
             if (!Object.keys(COLORS).includes(input)) return;
@@ -117,13 +149,22 @@ function startGame(id, message, usersData) {
     grid[6][7] = color2.head;
     grid[apple.y][apple.x] = "🍎";
 
+    // Initialisation des effets spéciaux
+    game.specialItems = {
+        goldApple: null,
+        bomb: null,
+        speedBoost: null
+    };
+
     Object.assign(game, {
         grid,
         snakes: { [player1]: snake1, [player2]: snake2 },
         apple,
         turn: player2,
         scores: { [player1]: 0, [player2]: 0 },
-        colors: { [player1]: color1, [player2]: color2 }
+        colors: { [player1]: color1, [player2]: color2 },
+        effects: {},
+        itemTimers: {}
     });
 
     Promise.all([
@@ -145,42 +186,57 @@ function handleGameMove(id, event, message, usersData) {
         droite: { x: 1, y: 0 }
     };
 
+    // Vérifie si c'est une commande spéciale
     if (!directions[direction]) return;
 
     if (event.senderID !== game.turn) {
         return usersData.getName(event.senderID).then(name => message.reply(`❌ ${name}, ce n'est pas ton tour !`));
     }
 
+    // Gestion des effets spéciaux
+    const player = event.senderID;
+    const opponent = game.players.find(p => p !== player);
+    
+    // Appliquer l'effet de vitesse si actif
+    if (game.effects[player] === "speed" && game.itemTimers[player] > 0) {
+        game.itemTimers[player]--;
+        if (game.itemTimers[player] <= 0) {
+            delete game.effects[player];
+            delete game.itemTimers[player];
+        }
+    }
+
     const delta = directions[direction];
-    const snake = game.snakes[event.senderID];
+    const snake = game.snakes[player];
     const head = snake[0];
     const newHead = { x: head.x + delta.x, y: head.y + delta.y };
 
-    const opponent = game.players.find(p => p !== event.senderID);
+    // Vérification des collisions
     const isCollision = (
         newHead.x < 0 || newHead.y < 0 ||
         newHead.x > 7 || newHead.y > 7 ||
-        game.snakes[event.senderID].some(p => p.x === newHead.x && p.y === newHead.y)
+        game.snakes[player].some(p => p.x === newHead.x && p.y === newHead.y) ||
+        game.snakes[opponent].some(p => p.x === newHead.x && p.y === newHead.y)
     );
 
     if (isCollision) {
         Promise.all([
-            usersData.getName(event.senderID),
+            usersData.getName(player),
             opponent === "IA" ? "IA" : usersData.getName(opponent)
         ]).then(([loser, winner]) => {
             winData[opponent] = (winData[opponent] || 0) + 1;
             fs.writeFileSync(winsFile, JSON.stringify(winData, null, 2));
 
-            message.reply(`${loser} s'est écrasé ! ${winner} gagne ! �\n\n${renderGrid(game.grid, game.scores, loser, winner)}`);
+            message.reply(`💥 ${loser} s'est écrasé ! ${winner} gagne !\n\n${renderGrid(game.grid, game.scores, loser, winner)}`);
             delete snakeGames[id];
         });
         return;
     }
 
-    // Vérifier si un joueur a atteint 10 pommes
-    if (game.scores[event.senderID] >= 9) { // 9 car on va l'incrémenter juste après
-        game.scores[event.senderID]++;
-        const winner = event.senderID;
+    // Vérification de la victoire (10 points)
+    if (game.scores[player] >= 9) {
+        game.scores[player]++;
+        const winner = player;
         const loser = opponent;
         
         Promise.all([
@@ -196,61 +252,145 @@ function handleGameMove(id, event, message, usersData) {
         return;
     }
 
-    // Nouvelle logique: si un serpent mange l'autre
-    const otherSnake = game.snakes[opponent];
-    const headCollision = otherSnake.some(p => p.x === newHead.x && p.y === newHead.y);
-    
-    if (headCollision) {
-        // Le joueur actuel gagne 1 point
-        game.scores[event.senderID]++;
-        
-        // L'adversaire perd 1 point et est réduit
-        game.scores[opponent] = Math.max(0, game.scores[opponent] - 1);
-        
-        // Réduire le corps de l'adversaire de 1 segment (minimum 1)
-        if (otherSnake.length > 1) {
-            otherSnake.pop();
-        }
-        
-        // Remettre l'adversaire au départ
-        const startPos = opponent === game.players[0] ? { x: 0, y: 1 } : { x: 7, y: 6 };
-        game.snakes[opponent] = [startPos];
+    // Gestion des objets spéciaux
+    let specialEffect = null;
+    let pointsEarned = 0;
+
+    // Vérifier la pomme d'or
+    if (game.specialItems.goldApple && 
+        newHead.x === game.specialItems.goldApple.x && 
+        newHead.y === game.specialItems.goldApple.y) {
+        pointsEarned += 2;
+        game.specialItems.goldApple = null;
+        specialEffect = "🥇 +2 points!";
     }
 
-    const ateApple = newHead.x === game.apple.x && newHead.y === game.apple.y;
-    snake.unshift(newHead);
-    if (!ateApple) snake.pop();
-    else {
-        game.scores[event.senderID]++;
-        game.apple = spawnApple(game.grid, [...game.snakes[game.players[0]], ...game.snakes[game.players[1]]]);
+    // Vérifier la bombe
+    if (game.specialItems.bomb && 
+        newHead.x === game.specialItems.bomb.x && 
+        newHead.y === game.specialItems.bomb.y) {
+        game.scores[player] = Math.max(0, game.scores[player] - 1);
+        if (snake.length > 1) snake.pop();
+        game.specialItems.bomb = null;
+        specialEffect = "💣 Bombe! -1 point";
     }
+
+    // Vérifier le boost de vitesse
+    if (game.specialItems.speedBoost && 
+        newHead.x === game.specialItems.speedBoost.x && 
+        newHead.y === game.specialItems.speedBoost.y) {
+        game.effects[player] = "speed";
+        game.itemTimers[player] = 3;
+        game.specialItems.speedBoost = null;
+        specialEffect = "⚡ Vitesse x2 pendant 3 tours!";
+    }
+
+    // Vérifier la pomme normale
+    const ateApple = newHead.x === game.apple.x && newHead.y === game.apple.y;
+    if (ateApple) {
+        pointsEarned += 1;
+        game.apple = spawnApple(game.grid, getOccupiedCells(game));
+        spawnSpecialItems(game);
+    }
+
+    // Mise à jour du score et du serpent
+    game.scores[player] += pointsEarned;
+    snake.unshift(newHead);
+    if (!ateApple && !specialEffect) snake.pop();
+
+    // Mise à jour des effets spéciaux
+    updateSpecialItems(game);
 
     // Mise à jour de la grille
-    game.grid = Array(8).fill(null).map(() => Array(8).fill("⬛"));
-    
-    // Dessiner le serpent 1
-    for (const p of game.snakes[game.players[0]]) {
-        game.grid[p.y][p.x] = game.players[0] === "IA" ? "🔵" : game.colors[game.players[0]].body;
-    }
-    game.grid[game.snakes[game.players[0]][0].y][game.snakes[game.players[0]][0].x] = game.colors[game.players[0]].head;
-    
-    // Dessiner le serpent 2
-    for (const p of game.snakes[game.players[1]]) {
-        game.grid[p.y][p.x] = game.players[1] === "IA" ? "🟦" : game.colors[game.players[1]].body;
-    }
-    game.grid[game.snakes[game.players[1]][0].y][game.snakes[game.players[1]][0].x] = game.colors[game.players[1]].head;
-    
-    game.grid[game.apple.y][game.apple.x] = "🍎";
-    game.turn = opponent;
+    updateGameGrid(game);
 
+    // Déterminer le prochain joueur
+    if (game.effects[player] === "speed" && game.itemTimers[player] > 0) {
+        game.turn = player; // Rejoue si effet vitesse
+    } else {
+        game.turn = opponent;
+    }
+
+    // Préparer le message avec effets spéciaux
     Promise.all([
         usersData.getName(game.players[0]),
         game.players[1] === "IA" ? "IA" : usersData.getName(game.players[1]),
         game.turn === "IA" ? "IA" : usersData.getName(game.turn)
     ]).then(([name1, name2, next]) => {
-        message.reply(renderGrid(game.grid, game.scores, name1, name2, next));
+        let reply = renderGrid(game.grid, game.scores, name1, name2, next);
+        if (specialEffect) reply += `\n\n🌟 ${specialEffect}`;
+        message.reply(reply);
         if (game.turn === "IA") aiPlay(id, message, usersData);
     });
+}
+
+function spawnSpecialItems(game) {
+    // 25% de chance de faire apparaître un item spécial
+    if (Math.random() < 0.25) {
+        const items = ["🥇", "💣", "⚡"];
+        const itemType = items[Math.floor(Math.random() * items.length)];
+        
+        if (itemType === "🥇" && !game.specialItems.goldApple) {
+            game.specialItems.goldApple = spawnApple(game.grid, getOccupiedCells(game));
+            game.itemTimers.goldApple = 5;
+        } 
+        else if (itemType === "💣" && !game.specialItems.bomb) {
+            game.specialItems.bomb = spawnApple(game.grid, getOccupiedCells(game));
+        } 
+        else if (itemType === "⚡" && !game.specialItems.speedBoost) {
+            game.specialItems.speedBoost = spawnApple(game.grid, getOccupiedCells(game));
+        }
+    }
+}
+
+function updateSpecialItems(game) {
+    // Mettre à jour le timer de la pomme d'or
+    if (game.specialItems.goldApple && game.itemTimers.goldApple > 0) {
+        game.itemTimers.goldApple--;
+        if (game.itemTimers.goldApple <= 0) {
+            game.specialItems.goldApple = null;
+        }
+    }
+}
+
+function getOccupiedCells(game) {
+    const occupied = [];
+    for (const player of game.players) {
+        occupied.push(...game.snakes[player]);
+    }
+    occupied.push(game.apple);
+    if (game.specialItems.goldApple) occupied.push(game.specialItems.goldApple);
+    if (game.specialItems.bomb) occupied.push(game.specialItems.bomb);
+    if (game.specialItems.speedBoost) occupied.push(game.specialItems.speedBoost);
+    return occupied;
+}
+
+function updateGameGrid(game) {
+    // Réinitialiser la grille
+    game.grid = Array(8).fill(null).map(() => Array(8).fill("⬛"));
+
+    // Dessiner les serpents
+    for (const player of game.players) {
+        const snake = game.snakes[player];
+        for (let i = 0; i < snake.length; i++) {
+            const part = snake[i];
+            game.grid[part.y][part.x] = i === 0 
+                ? game.colors[player].head 
+                : game.colors[player].body;
+        }
+    }
+
+    // Dessiner les objets
+    game.grid[game.apple.y][game.apple.x] = "🍎";
+    if (game.specialItems.goldApple) {
+        game.grid[game.specialItems.goldApple.y][game.specialItems.goldApple.x] = "🥇";
+    }
+    if (game.specialItems.bomb) {
+        game.grid[game.specialItems.bomb.y][game.specialItems.bomb.x] = "💣";
+    }
+    if (game.specialItems.speedBoost) {
+        game.grid[game.specialItems.speedBoost.y][game.specialItems.speedBoost.x] = "⚡";
+    }
 }
 
 function renderGrid(grid, scores, name1, name2, joueurActuel = "") {
@@ -258,7 +398,7 @@ function renderGrid(grid, scores, name1, name2, joueurActuel = "") {
     const middle = grid.map((row, i) => `${i + 1} ${row.join(" ")} ${i + 1}`).join("\n");
     const bottom = "   A B C D E F G H\n";
     const scoreLine = `Scores : ${name1} ${scores[Object.keys(scores)[0]]} - ${name2} ${scores[Object.keys(scores)[1]]}`;
-    const prompt = joueurActuel ? `\n\n🎮 ${joueurActuel}, à toi ! (haut, bas, gauche ou droite) :` : "";
+    const prompt = joueurActuel ? `\n\n🎮 ${joueurActuel}, à toi ! (haut, bas, gauche, droite ou stop) :` : "";
     return `${top}${middle}\n${bottom}\n${scoreLine}${prompt}`;
 }
 
@@ -287,6 +427,11 @@ function aiPlay(gameId, message, usersData) {
         const goal = game.apple;
         const gridSize = 8;
 
+        // Priorité aux objets spéciaux
+        let target = goal;
+        if (game.specialItems.goldApple) target = game.specialItems.goldApple;
+        if (game.specialItems.speedBoost && game.itemTimers.IA === undefined) target = game.specialItems.speedBoost;
+
         const isBlocked = (x, y) => {
             if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return true;
             const occupied = [...game.snakes[game.players[0]], ...game.snakes["IA"]];
@@ -299,7 +444,7 @@ function aiPlay(gameId, message, usersData) {
 
         while (openSet.length) {
             const current = openSet.shift();
-            if (current.x === goal.x && current.y === goal.y) {
+            if (current.x === target.x && current.y === target.y) {
                 const dir = current.path[0];
                 const fakeEvent = { senderID: "IA", body: dir };
                 return module.exports.onChat({ event: fakeEvent, message, usersData });
@@ -324,5 +469,5 @@ function aiPlay(gameId, message, usersData) {
         const fakeEvent = { senderID: "IA", body: chosen ? chosen[0] : "haut" };
         module.exports.onChat({ event: fakeEvent, message, usersData });
 
-    }, 800);
-}
+    }, 1000);
+        }
