@@ -161,7 +161,25 @@ async function getGeminiResponse(uid, prompt, fileUrls = []) {
     const auth = new google.auth.GoogleAuth().fromAPIKey(API_KEY);
     
     // Charger l'historique complet
-    const chatHistory = loadChatHistory(uid);
+    let chatHistory = loadChatHistory(uid);
+    
+    // Ajouter un message système en français si l'historique est vide
+    if (chatHistory.length === 0) {
+      chatHistory = [
+        {
+          role: "user",
+          parts: [{ 
+            text: "Tu es Megan Education, un assistant IA francophone. " +
+                  "Réponds toujours en français sauf si l'utilisateur pose une question dans une autre langue. " +
+                  "Sois concis, précis et utile."
+          }]
+        },
+        {
+          role: "model",
+          parts: [{ text: "D'accord, je suis prêt. Je répondrai en français par défaut." }]
+        }
+      ];
+    }
     
     // Préparer les fichiers pour la requête actuelle uniquement
     const fileDataParts = [];
@@ -270,13 +288,31 @@ async function handleAIRequest({ api, message, event, prompt, fileUrls = [] }) {
     api.setMessageReaction("💖", event.messageID, () => {}, true);
     
     // Envoyer la réponse
-    message.reply(`🎀𝗠𝗘𝗚𝗔𝗡•°𝗘𝗗𝗨𝗖𝗔𝗧𝗜𝗢𝗡🎀\n━━━━━━━━━━━━━━━━━━\n${response}`);
+    const replyMessage = await message.reply(`🎀𝗠𝗘𝗚𝗔𝗡•°𝗘𝗗𝗨𝗖𝗔𝗧𝗜𝗢𝗡🎀\n━━━━━━━━━━━━━━━━━━\n${response}`);
+    
+    // Enregistrer pour le système de réponse
+    if (replyMessage && replyMessage.messageID) {
+      global.GoatBot.onReply.set(replyMessage.messageID, {
+        commandName: "ai",
+        author: event.senderID,
+        threadID: event.threadID
+      });
+    }
   } catch (error) {
     // Fallback si Gemini échoue
     try {
       const fallbackResponse = await getFallbackResponse(prompt);
       api.setMessageReaction("⚠", event.messageID, () => {}, true);
-      message.reply(`🎀𝗠𝗘𝗚𝗔𝗡•°𝗘𝗗𝗨𝗖𝗔𝗧𝗜𝗢𝗡🎀\n━━━━━━━━━━━━━━━━━━\n${fallbackResponse}`);
+      const replyMessage = await message.reply(`🎀𝗠𝗘𝗚𝗔𝗡•°𝗘𝗗𝗨𝗖𝗔𝗧𝗜𝗢𝗡🎀\n━━━━━━━━━━━━━━━━━━\n${fallbackResponse}`);
+      
+      // Enregistrer pour le système de réponse
+      if (replyMessage && replyMessage.messageID) {
+        global.GoatBot.onReply.set(replyMessage.messageID, {
+          commandName: "ai",
+          author: event.senderID,
+          threadID: event.threadID
+        });
+      }
     } catch (fallbackError) {
       api.setMessageReaction("❌", event.messageID, () => {}, true);
       message.reply("🎀𝗠𝗘𝗚𝗔𝗡•°𝗘𝗗𝗨𝗖𝗔𝗧𝗜𝗢𝗡🎀\n━━━━━━━━━━━━━━━━━━\n❌ Désolé, une erreur critique est survenue");
@@ -284,24 +320,27 @@ async function handleAIRequest({ api, message, event, prompt, fileUrls = [] }) {
   }
 }
 
+// Système de verrou pour éviter les doubles réponses
+const activeRequests = new Set();
+
 module.exports = {
   config: {
     name: 'ai',
-    version: '4.1.0',
+    version: '8.0.0',
     role: 0,
     category: 'AI',
     author: 'Metoushela Walker',
     shortDescription: 'Super IA avec intelligence améliorée',
-    longDescription: 'Assistant IA ultra-intelligent avec compréhension contextuelle avancée et mémoire persistante',
+    longDescription: 'Assistant IA ultra-intelligent en français avec système de réponse continue',
   },
 
   onStart: async function () {},
 
   onChat: async function ({ api, message, event, args }) {
     const body = event.body || '';
-    const ahprefix = UPoLPrefix.find(p => body.toLowerCase().startsWith(p));
     
-    // Si pas de préfixe, ignorer
+    // Vérifier le préfixe
+    const ahprefix = UPoLPrefix.find(p => body.toLowerCase().startsWith(p));
     if (!ahprefix) return;
 
     const fullCommand = body.substring(ahprefix.length).trim();
@@ -351,13 +390,68 @@ module.exports = {
         .map(att => att.url);
     }
 
-    // Traiter la requête AI
-    await handleAIRequest({ 
-      api, 
-      message, 
-      event, 
-      prompt: fullCommand, 
-      fileUrls 
-    });
+    // Créer un ID unique pour cette requête
+    const requestId = `${event.threadID}_${event.senderID}_${Date.now()}`;
+    
+    // Vérifier si cette requête est déjà en cours
+    if (activeRequests.has(requestId)) return;
+    activeRequests.add(requestId);
+
+    try {
+      // Traiter la requête AI
+      await handleAIRequest({ 
+        api, 
+        message, 
+        event, 
+        prompt: fullCommand, 
+        fileUrls 
+      });
+    } finally {
+      // Nettoyer après traitement
+      activeRequests.delete(requestId);
+    }
+  },
+
+  onReply: async function ({ api, message, event, Reply }) {
+    // Créer un ID unique pour cette requête
+    const requestId = `${event.threadID}_${event.senderID}_${Date.now()}`;
+    
+    // Vérifier si cette requête est déjà en cours
+    if (activeRequests.has(requestId)) return;
+    activeRequests.add(requestId);
+
+    try {
+      // Vérifier si c'est une réponse à un message du bot
+      if (event.type !== "message_reply" || event.messageReply.senderID !== api.getCurrentUserID()) {
+        return;
+      }
+
+      const { commandName, author } = Reply;
+      if (commandName !== this.config.name) return;
+      if (author !== event.senderID) return;
+
+      const prompt = event.body.trim();
+      if (!prompt) return;
+
+      // Préparation des fichiers
+      let fileUrls = [];
+      if (event.attachments) {
+        fileUrls = event.attachments
+          .filter(att => att.type === "photo" || att.type === "video" || att.type === "audio")
+          .map(att => att.url);
+      }
+
+      // Traiter la requête AI
+      await handleAIRequest({ 
+        api, 
+        message, 
+        event, 
+        prompt, 
+        fileUrls 
+      });
+    } finally {
+      // Nettoyer après traitement
+      activeRequests.delete(requestId);
+    }
   }
 };
