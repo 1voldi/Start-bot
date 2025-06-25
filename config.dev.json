@@ -12,14 +12,14 @@
 	"antiInbox": false,
 	"language": "en",
 	"notesLanguage": "change to your language with ISO 639-1 code, available languages: vi (Vietnamese), en (English)",
-	"nickNameBot": "🩷𝗠𝗘𝗚𝗔𝗡🪭𝗔𝗜-𝗕𝗢𝗧🪷",
+	"nickNameBot": "𝐿𝐴𝑅𝑂𝑈𝑋𝐾𝐼 𝑆𝑇𝐴𝑅𝑇 𝐵𝑂𝑇🌹🍓❤️",
 	"prefix": ".",
 	"adminOnly": {
 		"enable": false,
 		"ignoreCommand": []
 	},
 	"adminBot": [
-		"100080479775577","61575839792460","61557674704673","61575839792460"
+		"61551757747742","61570485724919","",""
 	 
 	],
 	"whiteListMode": {
