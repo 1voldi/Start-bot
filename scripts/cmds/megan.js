@@ -1,5 +1,5 @@
 const axios = require('axios');  
-const PREFIXES = ['megan', '/megan', '-megan'];  
+const PREFIXES = ['larouxki', '/larouxki', '-larouxki'];  
 const conversationHistory = {};  
 const userMemory = {};  
 const meganStatus = {}; // {threadID: true/false}  
@@ -11,13 +11,13 @@ const baseApiUrl = async () => {
   
 module.exports = {  
   config: {  
-    name: 'megan',  
+    name: 'Larouxki',  
     version: '3.0.1',  
     role: 0,  
     category: 'AI',  
     author: 'Blẳȼk',  
     shortDescription: 'IA intelligente et personnalisée',  
-    longDescription: 'Megan est une IA féminine, attentive, polie et capable de retenir ce que vous lui dites.',  
+    longDescription: 'Larouxki est une IA féminine, attentive, polie et capable de retenir ce que vous lui dites.',  
     guide: {  
       fr: '{pn} on | off : Active ou désactive Megan dans le groupe.\n{pn} prénom = <ton prénom> : Enregistre ton prénom pour des réponses personnalisées.'  
     }  
@@ -35,7 +35,7 @@ module.exports = {
     // Gestion des commandes on/off    
     if (['megan on', '/megan on', '-megan on'].includes(lowerBody)) {    
       meganStatus[threadID] = true;    
-      return message.reply("Conversation démarrée avec Megan, vous pouvez discuter avec votre assistante maintenant ! 💕");    
+      return message.reply("Conversation démarrée avec Larouxki, vous pouvez discuter avec votre assistante maintenant ! 💕");    
     }    
   
     if (['megan off', '/megan off', '-megan off'].includes(lowerBody)) {    
@@ -43,7 +43,7 @@ module.exports = {
       return message.reply("Très bien, à une prochaine fois. N’hésite pas à revenir échanger avec moi 🫂.");    
     }    
   
-    // Si Megan est désactivée, ne rien faire    
+    // Si larouxki est désactivée, ne rien faire    
     if (!meganStatus[threadID]) return;    
   
     // Détection prénom personnalisé    
@@ -95,7 +95,7 @@ module.exports = {
   
     if (!conversationHistory[senderID]) {    
       conversationHistory[senderID] = [    
-        "Tu es Megan, une IA féminine, intelligente, explicite, respectueuse, utile, et polie. Tu t'adaptes à ton interlocuteur. Tu es simple mais claire. Tu n'es ni amoureuse, ni flirteuse. Sois factuelle et concise."    
+        "Tu es Larouxki, une IA féminine, intelligente, explicite, respectueuse, utile, et polie. Tu t'adaptes à ton interlocuteur. Tu es simple mais claire. Tu n'es ni amoureuse, ni flirteuse. Sois factuelle et concise."    
       ];    
     }    
   
