@@ -169,7 +169,7 @@ async function getGeminiResponse(uid, prompt, fileUrls = []) {
         {
           role: "user",
           parts: [{ 
-            text: "Tu es Megan Education, un assistant IA francophone. " +
+            text: "Tu es Larouxki Bot, un assistant IA francophone. " +
                   "Réponds toujours en français sauf si l'utilisateur pose une question dans une autre langue. " +
                   "Sois concis, précis et utile."
           }]
@@ -280,15 +280,15 @@ async function handleAIRequest({ api, message, event, prompt, fileUrls = [] }) {
   const uid = event.senderID;
   
   // Réaction "en train de réfléchir"
-  api.setMessageReaction("🎀", event.messageID, () => {}, true);
+  api.setMessageReaction("🍓", event.messageID, () => {}, true);
 
   try {
     // Essayer Gemini en premier
     const response = await getGeminiResponse(uid, prompt, fileUrls);
-    api.setMessageReaction("💖", event.messageID, () => {}, true);
+    api.setMessageReaction("🌹", event.messageID, () => {}, true);
     
     // Envoyer la réponse
-    const replyMessage = await message.reply(`🎀𝗠𝗘𝗚𝗔𝗡•°𝗘𝗗𝗨𝗖𝗔𝗧𝗜𝗢𝗡🎀\n━━━━━━━━━━━━━━━━━━\n${response}`);
+    const replyMessage = await message.reply(`🍓𝐿𝐴𝑅𝑂𝑈𝑋𝐾𝐼 𝑆𝑇𝐴𝑅𝑇 𝐵𝑂𝑇🍓\n●▬▬▬▬๑۩۩๑▬▬▬▬▬●\n${response}`);
     
     // Enregistrer pour le système de réponse
     if (replyMessage && replyMessage.messageID) {
@@ -303,7 +303,7 @@ async function handleAIRequest({ api, message, event, prompt, fileUrls = [] }) {
     try {
       const fallbackResponse = await getFallbackResponse(prompt);
       api.setMessageReaction("⚠", event.messageID, () => {}, true);
-      const replyMessage = await message.reply(`🎀𝗠𝗘𝗚𝗔𝗡•°𝗘𝗗𝗨𝗖𝗔𝗧𝗜𝗢𝗡🎀\n━━━━━━━━━━━━━━━━━━\n${fallbackResponse}`);
+      const replyMessage = await message.reply(`🍓𝐿𝐴𝑅𝑂𝑈𝑋𝐾𝐼 𝑆𝑇𝐴𝑅𝑇 𝐵𝑂𝑇🍓\n●▬▬▬▬๑۩۩๑▬▬▬▬▬●\n${fallbackResponse}`);
       
       // Enregistrer pour le système de réponse
       if (replyMessage && replyMessage.messageID) {
@@ -315,7 +315,7 @@ async function handleAIRequest({ api, message, event, prompt, fileUrls = [] }) {
       }
     } catch (fallbackError) {
       api.setMessageReaction("❌", event.messageID, () => {}, true);
-      message.reply("🎀𝗠𝗘𝗚𝗔𝗡•°𝗘𝗗𝗨𝗖𝗔𝗧𝗜𝗢𝗡🎀\n━━━━━━━━━━━━━━━━━━\n❌ Désolé, une erreur critique est survenue");
+      message.reply("🍓𝐿𝐴𝑅𝑂𝑈𝑋𝐾𝐼 𝑆𝑇𝐴𝑅𝑇 𝐵𝑂𝑇🍓\n●▬▬▬▬๑۩۩๑▬▬▬▬▬●\n❌ Désolé, une erreur critique est survenue");
     }
   }
 }
@@ -350,8 +350,8 @@ module.exports = {
     if (cleanCommands.some(cmd => fullCommand.toLowerCase().includes(cmd))) {
       const success = cleanAllHistories();
       return message.reply(
-        success ? "🎀𝗠𝗘𝗚𝗔𝗡•°𝗘𝗗𝗨𝗖𝗔𝗧𝗜𝗢𝗡🎀\n━━━━━━━━━━━━━━━━━━\n✅ Mémoire effacée avec succès !" : 
-                 "🎀𝗠𝗘𝗚𝗔𝗡•°𝗘𝗗𝗨𝗖𝗔𝗧𝗜𝗢𝗡🎀\n━━━━━━━━━━━━━━━━━━\n❌ Échec de la suppression de la mémoire"
+        success ? "🍓𝐿𝐴𝑅𝑂𝑈𝑋𝐾𝐼 𝑆𝑇𝐴𝑅𝑇 𝐵𝑂𝑇🍓\n●▬▬▬▬๑۩۩๑▬▬▬▬▬●\n✅ Mémoire effacée avec succès !" : 
+                 "🍓𝐿𝐴𝑅𝑂𝑈𝑋𝐾𝐼 𝑆𝑇𝐴𝑅𝑇 𝐵𝑂𝑇🍓\n●▬▬▬▬๑۩۩๑▬▬▬▬▬●\n❌ Échec de la suppression de la mémoire"
       );
     }
 
@@ -374,7 +374,7 @@ module.exports = {
       const preposition = paysMasculins.includes(country) ? 'au' : 'en';
 
       return message.reply(
-        `🎀𝗠𝗘𝗚𝗔𝗡•°𝗘𝗗𝗨𝗖𝗔𝗧𝗜𝗢𝗡🎀\n━━━━━━━━━━━━━━━━━━\n📅 Nous sommes le ${dateStr}\n🕒 Il est ${timeStr} ${preposition} ${countryName}`
+        `🍓𝐿𝐴𝑅𝑂𝑈𝑋𝐾𝐼 𝑆𝑇𝐴𝑅𝑇 𝐵𝑂𝑇🍓\n━━━━━━━━━━━━━━━━━━\n📅 Nous sommes le ${dateStr}\n🕒 Il est ${timeStr} ${preposition} ${countryName}`
       );
     }
 
